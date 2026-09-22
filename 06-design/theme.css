@@ -1,0 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;600;700;800&display=swap');
+
+:root {
+  --fbr-bg: #0B0D14;
+  --fbr-surface: #121622;
+  --fbr-surface-raised: #171C2B;
+  --fbr-surface-sidebar: #0E111B;
+  --fbr-border: #2A3247;
+  --fbr-border-strong: #334269;
+  --fbr-text: #F5F7FB;
+  --fbr-text-muted: #8F9AB2;
+  --fbr-text-soft: #D3D9EA;
+  --fbr-primary: #5B8CFF;
+  --fbr-accent: #A979FF;
+  --fbr-success: #57D6A0;
+  --fbr-warning: #F5BD5A;
+  --fbr-danger: #FF7080;
+  --fbr-on-primary: #0B0D14;
+  --fbr-font-sans: Manrope, Inter, ui-sans-serif, system-ui, sans-serif;
+  --fbr-font-mono: 'DM Mono', ui-monospace, monospace;
+  --fbr-radius-xs: 6px;
+  --fbr-radius-sm: 7px;
+  --fbr-radius-md: 10px;
+  --fbr-radius-lg: 12px;
+  --fbr-radius-pill: 20px;
+}
+
+.fbr-app { background:var(--fbr-bg); color:var(--fbr-text); font:14px var(--fbr-font-sans); }
+.fbr-panel { background:var(--fbr-surface); border:1px solid var(--fbr-border); border-radius:var(--fbr-radius-lg); }
+.fbr-card { background:var(--fbr-surface-raised); border:1px solid var(--fbr-border); border-radius:var(--fbr-radius-md); }
+.fbr-button-primary { background:var(--fbr-primary); color:var(--fbr-on-primary); border:1px solid var(--fbr-primary); border-radius:var(--fbr-radius-sm); padding:10px 14px; }
+.fbr-button-secondary { background:var(--fbr-surface-raised); color:var(--fbr-text); border:1px solid var(--fbr-border); border-radius:var(--fbr-radius-sm); padding:10px 14px; }
+.fbr-label { color:var(--fbr-primary); font:500 11px var(--fbr-font-mono); letter-spacing:.1em; text-transform:uppercase; }
+.fbr-status-success { color:var(--fbr-success); background:#121622; border:1px solid #316C5A; border-radius:var(--fbr-radius-pill); padding:5px 8px; }
+.fbr-status-warning { color:var(--fbr-warning); background:#121622; border:1px solid #765A2B; border-radius:var(--fbr-radius-pill); padding:5px 8px; }
+.fbr-status-danger { color:var(--fbr-danger); background:#121622; border:1px solid #773842; border-radius:var(--fbr-radius-pill); padding:5px 8px; }
