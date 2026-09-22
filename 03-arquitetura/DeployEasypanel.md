@@ -1,75 +1,87 @@
-# Guia de Deploy — Easypanel (VPS Própria)
+# Guia de Deploy no Easypanel — FBR Control Tower
 
-Este guia orienta o deploy contínuo do **FBR Sales Engine** utilizando o **Easypanel** em sua VPS própria (Ubuntu/Debian com Docker).
-
----
-
-## 1. Visão Geral do Serviço no Easypanel
-
-No painel do Easypanel:
-- **Tipo de Serviço:** `App`
-- **Fonte (Source):** `GitHub`
-- **Repositório:** `appbigwriter/salesengine`
-- **Branch:** `main`
-- **Build Method:** `Dockerfile`
-- **Root Directory / Build Path:** `09-codigo`
-- **Porta da Aplicação:** `3000`
+Este documento detalha o procedimento de deploy do **Sales Engine** no ambiente de produção provisionado pela **FBR Control Tower**.
 
 ---
 
-## 2. Configuração Passo a Passo no Easypanel
+## 1. Identidade & Especificações de Provisionamento
 
-### Passo 1: Criar o Projeto e Aplicação
-1. Acesse o painel do seu Easypanel (ex: `https://easypanel.seu-dominio.com`).
-2. Crie um novo Projeto chamado `fbr-sales-engine` (ou selecione um existente).
-3. Clique em **+ New** e selecione **App**.
-
-### Passo 2: Configurar a Fonte do Código (GitHub)
-1. Na aba **Source**:
-   - Selecione **GitHub**.
-   - Conecte o repositório: `appbigwriter/salesengine`.
-   - Branch: `main`.
-   - **Root Directory / Build Path:** `09-codigo` *(Importante: o código Next.js está nesta pasta)*.
-   - **Build Type:** `Dockerfile`.
-
-### Passo 3: Configurar Portas e Domínio
-1. Na aba **Domains**:
-   - Adicione o domínio/subdomínio apontado para a VPS (ex: `sales.fbragency.com.br`).
-   - Habilite a geração automática de certificado SSL (Let's Encrypt / HTTPS).
-   - Porta interna do container: `3000`.
-
-### Passo 4: Configurar Variáveis de Ambiente (Environment Variables)
-Na aba **Environment**, insira as variáveis necessárias (veja seção 3 abaixo).
-
-### Passo 5: Deploy
-Clique em **Deploy**. O Easypanel irá clonar o repositório, executar o build multi-stage do `Dockerfile` e subir o container na porta 3000 com reinicialização automática (`restart: unless-stopped`).
+- **Project ID:** `7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72`
+- **Slug:** `sales`
+- **Template:** `custom_base` (v1.0.0)
+- **Target Server:** `vps2`
+- **Easypanel Project:** `sistemas`
+- **Easypanel Service:** `sales`
+- **Source Path:** `/09-codigo`
+- **Domínio Oficial:** `sales.fbr.news`
+- **Healthcheck / Validação:** `https://sales.fbr.news/health` (esperado HTTP 200)
+- **Porta:** `3400`
+- **Host:** `0.0.0.0`
+- **Schema Exclusivo no Supabase:** `custom_salesengine`
 
 ---
 
-## 3. Checklist de Variáveis de Ambiente no Easypanel
+## 2. Passo a Passo no Easypanel
 
-| Variável | Tipo | Descrição | Exemplo |
-| :--- | :--- | :--- | :--- |
-| `NODE_ENV` | Sistema | Ambiente de execução | `production` |
-| `PORT` | Sistema | Porta de escuta do servidor | `3000` |
-| `NEXT_PUBLIC_APP_URL` | Público | URL pública do Sales Engine | `https://sales.fbragency.com.br` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Público | URL do projeto Supabase | `https://xxxxxx.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Público | Chave pública anônima do Supabase | `eyJhbGciOi...` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Segredo | Chave restrita de serviço (bypass RLS) | `eyJhbGciOi...` |
-| `OPENAI_API_KEY` | Segredo | Chave da OpenAI para o AI SDR | `sk-proj-...` |
-| `ANTHROPIC_API_KEY` | Segredo (Opcional) | Chave Anthropic Claude para fallback | `sk-ant-...` |
-| `RESEND_API_KEY` | Segredo | Token de disparo de Cold E-mail | `re_...` |
-| `EVOLUTION_API_URL` | Segredo | URL da API Evolution do WhatsApp | `https://whatsapp.fbragency.com.br` |
-| `EVOLUTION_API_KEY` | Segredo | Chave global da Evolution API | `your_evolution_secret_token` |
-| `UPSTASH_REDIS_REST_URL` | Segredo | URL do Redis/Upstash para filas | `https://xxxxxx.upstash.io` |
-| `UPSTASH_REDIS_REST_TOKEN` | Segredo | Token do Redis/Upstash para rate limit | `your_redis_token` |
+1. Acesse o **Easypanel** na `vps2`.
+2. Abra o projeto **sistemas** e selecione o serviço **sales**.
+3. Na aba **Source**:
+   - **Repository:** `appbigwriter/salesengine`
+   - **Branch:** `main`
+   - **Root Directory / Build Path:** `09-codigo`
+   - **Build Type:** `Dockerfile`
+4. Na aba **Domains**:
+   - Domínio: `sales.fbr.news` (com SSL / Let's Encrypt habilitado).
+   - Porta do Container: `3400`.
+5. Na aba **Environment**:
+   - Cole as variáveis de runtime especificadas abaixo (o destino padrão é `.env`).
+6. Clique em **Deploy** e aguarde a finalização do build.
+7. Acesse `https://sales.fbr.news/health` e confirme o retorno `HTTP 200 OK`.
 
 ---
 
-## 4. Atualizações Automáticas (Auto-Deploy Webhook)
+## 3. Variáveis de Runtime (Environment)
 
-Para que cada `git push` na branch `main` realize deploy automático na VPS:
-1. No Easypanel, na aba **Source** da aplicação, copie a **Deploy Webhook URL**.
-2. Acesse seu repositório no GitHub: `Settings > Webhooks > Add webhook`.
-3. Cole a URL no campo **Payload URL**, selecione `application/json` e evento `Just the push event`.
-4. Salve o webhook. Agora, todo commit na branch `main` atualizará o Sales Engine na sua VPS em segundos.
+```env
+NODE_ENV=production
+APP_ENV=production
+PORT=3400
+HOST=0.0.0.0
+
+CONTROL_TOWER_BASE_URL=https://control-tower.fbr.news
+CONTROL_TOWER_PROJECT_ID=7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72
+CONTROL_TOWER_SCHEMA_NAME=custom_salesengine
+
+DATABASE_URL=<SUPABASE_CENTRAL_DATABASE_URL_ACCESSIBLE_FROM_RUNTIME>
+SUPABASE_URL=https://supabase-control-tower-api.fbr.news
+SUPABASE_SERVICE_ROLE_KEY=<SUPABASE_CENTRAL_SERVICE_ROLE_KEY>
+SUPABASE_ANON_KEY=<secret-manager:fbr/custom/7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72/SUPABASE_ANON_KEY>
+
+NEXT_PUBLIC_SUPABASE_URL=https://supabase-control-tower-api.fbr.news
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<secret-manager:fbr/custom/7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72/SUPABASE_ANON_KEY>
+NEXT_PUBLIC_APP_URL=https://sales.fbr.news
+
+AUTHORITY_ADMIN_TOKEN=<GENERATED_AND_PERSISTED_AUTHORITY_ADMIN_TOKEN>
+AUTHORITY_OPERATOR_TOKEN=<GENERATED_AND_PERSISTED_AUTHORITY_OPERATOR_TOKEN>
+AUTHORITY_REVIEWER_TOKEN=<GENERATED_AND_PERSISTED_AUTHORITY_REVIEWER_TOKEN>
+AUTHORITY_PUBLISHER_TOKEN=<GENERATED_AND_PERSISTED_AUTHORITY_PUBLISHER_TOKEN>
+AUTHORITY_VIEWER_TOKEN=<GENERATED_AND_PERSISTED_AUTHORITY_VIEWER_TOKEN>
+
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
+EVOLUTION_API_URL=https://whatsapp.fbragency.com.br
+EVOLUTION_API_KEY=your_evolution_global_api_token
+
+UPSTASH_REDIS_REST_URL=https://xxxxxxxxxxxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_upstash_redis_token
+```
+
+---
+
+## 4. Regras de Arquitetura & Governança
+
+- **Isolamento de Schema:** Operar exclusivamente no schema `custom_salesengine`. Nenhuma tabela deve ser criada no schema `public`.
+- **Preflight Check:** A FBR Control Tower executa preflight `select 1` e valida o endpoint `/health`.
+- **Segurança de Tokens:** Tokens privados `AUTHORITY_*_TOKEN` e `SUPABASE_SERVICE_ROLE_KEY` nunca são enviados ao browser ou expostos no front-end.

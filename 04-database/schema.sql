@@ -1,16 +1,100 @@
 -- ==============================================================================
--- FBR SALES ENGINE — DATABASE SCHEMA (PostgreSQL / Supabase)
+-- FBR SALES ENGINE — DATABASE SCHEMA (Supabase Central)
+-- Schema exclusivo: custom_salesengine | Project ID: 7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72
 -- ==============================================================================
 
--- Habilitar extensões necessárias
+-- 1. Criação e isolamento do Schema exclusivo
+CREATE SCHEMA IF NOT EXISTS custom_salesengine;
+
+-- Extensões necessárias no banco
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "vector";
 
 -- ------------------------------------------------------------------------------
--- 1. WORKSPACES (Multi-Tenancy)
+-- 2. TABELAS BASE DE GOVERNANÇA (Template FBR custom_base v1.0.0)
 -- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS workspaces (
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.entities (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    owner_id VARCHAR(100),
+    entity_type VARCHAR(100) NOT NULL,
+    slug VARCHAR(150),
+    name VARCHAR(255) NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.entity_relations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    parent_entity_id UUID NOT NULL REFERENCES custom_salesengine.entities(id) ON DELETE CASCADE,
+    child_entity_id UUID NOT NULL REFERENCES custom_salesengine.entities(id) ON DELETE CASCADE,
+    relation_type VARCHAR(100) NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(parent_entity_id, child_entity_id, relation_type)
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.records (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    entity_id UUID REFERENCES custom_salesengine.entities(id) ON DELETE CASCADE,
+    collection_name VARCHAR(100) NOT NULL,
+    data JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.files (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    file_name VARCHAR(255) NOT NULL,
+    file_path TEXT NOT NULL,
+    mime_type VARCHAR(100),
+    file_size_bytes BIGINT,
+    storage_provider VARCHAR(50) DEFAULT 'supabase_storage',
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    key VARCHAR(150) UNIQUE NOT NULL,
+    value JSONB NOT NULL,
+    description TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    actor_id VARCHAR(100),
+    action VARCHAR(150) NOT NULL,
+    resource_type VARCHAR(100),
+    resource_id VARCHAR(100),
+    payload JSONB DEFAULT '{}'::jsonb,
+    ip_address VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    event_name VARCHAR(150) NOT NULL,
+    payload JSONB NOT NULL,
+    processed_at TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ------------------------------------------------------------------------------
+-- 3. TABELAS DE DOMÍNIO DO SALES ENGINE (Multi-Tenancy & CRM)
+-- ------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.workspaces (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
@@ -19,10 +103,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ------------------------------------------------------------------------------
--- 2. USERS & WORKSPACE MEMBERS
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS custom_salesengine.users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -32,21 +113,18 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS workspace_members (
+CREATE TABLE IF NOT EXISTS custom_salesengine.workspace_members (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES custom_salesengine.workspaces(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES custom_salesengine.users(id) ON DELETE CASCADE,
     role VARCHAR(50) DEFAULT 'member',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(workspace_id, user_id)
 );
 
--- ------------------------------------------------------------------------------
--- 3. LEADS (Empresas & Contas-Alvo)
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS leads (
+CREATE TABLE IF NOT EXISTS custom_salesengine.leads (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES custom_salesengine.workspaces(id) ON DELETE CASCADE,
     company_name VARCHAR(255) NOT NULL,
     trade_name VARCHAR(255),
     cnpj VARCHAR(20),
@@ -64,13 +142,10 @@ CREATE TABLE IF NOT EXISTS leads (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ------------------------------------------------------------------------------
--- 4. CONTACTS (Pessoas & Tomadores de Decisão)
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS contacts (
+CREATE TABLE IF NOT EXISTS custom_salesengine.contacts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    lead_id UUID REFERENCES leads(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES custom_salesengine.workspaces(id) ON DELETE CASCADE,
+    lead_id UUID REFERENCES custom_salesengine.leads(id) ON DELETE CASCADE,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100),
     job_title VARCHAR(150),
@@ -86,12 +161,9 @@ CREATE TABLE IF NOT EXISTS contacts (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ------------------------------------------------------------------------------
--- 5. CAMPAIGNS & CADENCES (Motor Outbound)
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS campaigns (
+CREATE TABLE IF NOT EXISTS custom_salesengine.campaigns (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES custom_salesengine.workspaces(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     channel_type VARCHAR(50) NOT NULL CHECK (channel_type IN ('email', 'whatsapp', 'omnichannel', 'linkedin')),
     status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused', 'completed', 'archived')),
@@ -101,9 +173,9 @@ CREATE TABLE IF NOT EXISTS campaigns (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS campaign_steps (
+CREATE TABLE IF NOT EXISTS custom_salesengine.campaign_steps (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    campaign_id UUID NOT NULL REFERENCES custom_salesengine.campaigns(id) ON DELETE CASCADE,
     step_order INTEGER NOT NULL,
     channel VARCHAR(50) NOT NULL CHECK (channel IN ('email', 'whatsapp', 'linkedin_task', 'phone_call')),
     wait_days INTEGER DEFAULT 2,
@@ -114,10 +186,10 @@ CREATE TABLE IF NOT EXISTS campaign_steps (
     UNIQUE(campaign_id, step_order)
 );
 
-CREATE TABLE IF NOT EXISTS lead_campaign_enrollments (
+CREATE TABLE IF NOT EXISTS custom_salesengine.lead_campaign_enrollments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-    contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    campaign_id UUID NOT NULL REFERENCES custom_salesengine.campaigns(id) ON DELETE CASCADE,
+    contact_id UUID NOT NULL REFERENCES custom_salesengine.contacts(id) ON DELETE CASCADE,
     current_step_order INTEGER DEFAULT 1,
     status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'replied', 'bounced', 'unsubscribed', 'finished', 'paused')),
     next_action_at TIMESTAMP WITH TIME ZONE,
@@ -127,14 +199,11 @@ CREATE TABLE IF NOT EXISTS lead_campaign_enrollments (
     UNIQUE(campaign_id, contact_id)
 );
 
--- ------------------------------------------------------------------------------
--- 6. MESSAGES & INTERACTIONS LOG
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS messages_log (
+CREATE TABLE IF NOT EXISTS custom_salesengine.messages_log (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
-    campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
+    workspace_id UUID NOT NULL REFERENCES custom_salesengine.workspaces(id) ON DELETE CASCADE,
+    contact_id UUID REFERENCES custom_salesengine.contacts(id) ON DELETE SET NULL,
+    campaign_id UUID REFERENCES custom_salesengine.campaigns(id) ON DELETE SET NULL,
     channel VARCHAR(50) NOT NULL CHECK (channel IN ('email', 'whatsapp', 'linkedin', 'phone')),
     direction VARCHAR(20) NOT NULL CHECK (direction IN ('outbound', 'inbound')),
     sender_identifier VARCHAR(255),
@@ -147,21 +216,18 @@ CREATE TABLE IF NOT EXISTS messages_log (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ------------------------------------------------------------------------------
--- 7. PIPELINES, DEALS & PROPOSALS (CRM)
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS pipelines (
+CREATE TABLE IF NOT EXISTS custom_salesengine.pipelines (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES custom_salesengine.workspaces(id) ON DELETE CASCADE,
     name VARCHAR(150) NOT NULL,
     is_default BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS pipeline_stages (
+CREATE TABLE IF NOT EXISTS custom_salesengine.pipeline_stages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    pipeline_id UUID NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
+    pipeline_id UUID NOT NULL REFERENCES custom_salesengine.pipelines(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
     stage_order INTEGER NOT NULL,
     win_probability INTEGER DEFAULT 0 CHECK (win_probability >= 0 AND win_probability <= 100),
@@ -170,14 +236,14 @@ CREATE TABLE IF NOT EXISTS pipeline_stages (
     UNIQUE(pipeline_id, stage_order)
 );
 
-CREATE TABLE IF NOT EXISTS deals (
+CREATE TABLE IF NOT EXISTS custom_salesengine.deals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    pipeline_id UUID NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
-    stage_id UUID NOT NULL REFERENCES pipeline_stages(id) ON DELETE RESTRICT,
-    lead_id UUID REFERENCES leads(id) ON DELETE SET NULL,
-    contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
-    owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    workspace_id UUID NOT NULL REFERENCES custom_salesengine.workspaces(id) ON DELETE CASCADE,
+    pipeline_id UUID NOT NULL REFERENCES custom_salesengine.pipelines(id) ON DELETE CASCADE,
+    stage_id UUID NOT NULL REFERENCES custom_salesengine.pipeline_stages(id) ON DELETE RESTRICT,
+    lead_id UUID REFERENCES custom_salesengine.leads(id) ON DELETE SET NULL,
+    contact_id UUID REFERENCES custom_salesengine.contacts(id) ON DELETE SET NULL,
+    owner_user_id UUID REFERENCES custom_salesengine.users(id) ON DELETE SET NULL,
     title VARCHAR(255) NOT NULL,
     deal_value NUMERIC(12,2) DEFAULT 0.00,
     status VARCHAR(50) DEFAULT 'open' CHECK (status IN ('open', 'won', 'lost', 'abandoned')),
@@ -188,10 +254,10 @@ CREATE TABLE IF NOT EXISTS deals (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS proposals (
+CREATE TABLE IF NOT EXISTS custom_salesengine.proposals (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES custom_salesengine.workspaces(id) ON DELETE CASCADE,
+    deal_id UUID NOT NULL REFERENCES custom_salesengine.deals(id) ON DELETE CASCADE,
     proposal_number VARCHAR(50) UNIQUE NOT NULL,
     title VARCHAR(255) NOT NULL,
     content_json JSONB NOT NULL,
@@ -206,47 +272,42 @@ CREATE TABLE IF NOT EXISTS proposals (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ------------------------------------------------------------------------------
--- 8. AUDIT GATES & HUMAN-IN-THE-LOOP (Segurança Operacional)
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS audit_gates (
+CREATE TABLE IF NOT EXISTS custom_salesengine.audit_gates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES custom_salesengine.workspaces(id) ON DELETE CASCADE,
     action_type VARCHAR(100) NOT NULL,
     status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'executed')),
     payload JSONB NOT NULL,
-    requested_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    requested_by UUID REFERENCES custom_salesengine.users(id) ON DELETE SET NULL,
+    approved_by UUID REFERENCES custom_salesengine.users(id) ON DELETE SET NULL,
     decision_notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     decided_at TIMESTAMP WITH TIME ZONE
 );
 
 -- ------------------------------------------------------------------------------
--- 9. ÍNDICES DE PERFORMANCE
+-- 4. ÍNDICES DE PERFORMANCE
 -- ------------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_leads_workspace ON leads(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
-CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
-CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(whatsapp_phone);
-CREATE INDEX IF NOT EXISTS idx_deals_workspace ON deals(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_deals_stage ON deals(stage_id);
-CREATE INDEX IF NOT EXISTS idx_messages_contact ON messages_log(contact_id);
-CREATE INDEX IF NOT EXISTS idx_messages_created ON messages_log(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_gates_pending ON audit_gates(workspace_id, status) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_leads_workspace ON custom_salesengine.leads(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_leads_status ON custom_salesengine.leads(status);
+CREATE INDEX IF NOT EXISTS idx_contacts_email ON custom_salesengine.contacts(email);
+CREATE INDEX IF NOT EXISTS idx_contacts_phone ON custom_salesengine.contacts(whatsapp_phone);
+CREATE INDEX IF NOT EXISTS idx_deals_workspace ON custom_salesengine.deals(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_deals_stage ON custom_salesengine.deals(stage_id);
+CREATE INDEX IF NOT EXISTS idx_messages_contact ON custom_salesengine.messages_log(contact_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created ON custom_salesengine.messages_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gates_pending ON custom_salesengine.audit_gates(workspace_id, status) WHERE status = 'pending';
 
 -- ------------------------------------------------------------------------------
--- 10. ROW LEVEL SECURITY (RLS)
+-- 5. ROW LEVEL SECURITY (RLS)
 -- ------------------------------------------------------------------------------
-ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
-ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
-ALTER TABLE campaign_steps ENABLE ROW LEVEL SECURITY;
-ALTER TABLE lead_campaign_enrollments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE messages_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pipelines ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pipeline_stages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE proposals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_gates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.entities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.workspaces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.deals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.audit_gates ENABLE ROW LEVEL SECURITY;
