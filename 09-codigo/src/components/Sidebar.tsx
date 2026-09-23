@@ -10,7 +10,8 @@ import {
   ShieldCheck, 
   Settings,
   Sparkles,
-  Layers
+  Layers,
+  Target
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -21,6 +22,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard },
+    { id: 'opportunities', label: 'Opportunity Builder', icon: Target, badge: 'Afiliados', isAi: false },
     { id: 'leads', label: 'Leads & ICP', icon: Users, badge: '24 novos' },
     { id: 'cadences', label: 'Cadências Outbound', icon: Send },
     { id: 'whatsapp', label: 'WhatsApp Hub', icon: MessageSquare, badge: 'Anti-ban' },

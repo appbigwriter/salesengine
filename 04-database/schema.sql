@@ -286,7 +286,90 @@ CREATE TABLE IF NOT EXISTS custom_salesengine.audit_gates (
 );
 
 -- ------------------------------------------------------------------------------
--- 4. ÍNDICES DE PERFORMANCE
+-- 4. TABELAS DO MÓDULO OPPORTUNITY BUILDER (Afiliados & Pesquisa Profunda)
+-- ------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.opportunity_blogs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    name VARCHAR(255) NOT NULL,
+    niche VARCHAR(255) NOT NULL,
+    url TEXT,
+    external_blog_id VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.opportunity_source_categories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    source VARCHAR(50) NOT NULL CHECK (source IN ('amazon', 'maxweb', 'digistore24', 'clickbank')),
+    category VARCHAR(150) NOT NULL,
+    subcategory VARCHAR(150),
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.opportunity_score_weights (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    weights JSONB NOT NULL,
+    active BOOLEAN DEFAULT TRUE,
+    updated_by UUID REFERENCES custom_salesengine.users(id),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.opportunities (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL DEFAULT '7c69fcc5-f22c-4b54-9efd-f0b8ed9d4b72'::uuid,
+    name VARCHAR(255) NOT NULL,
+    source VARCHAR(50) NOT NULL CHECK (source IN ('amazon', 'maxweb', 'digistore24', 'clickbank')),
+    category VARCHAR(150),
+    subcategory VARCHAR(150),
+    market VARCHAR(10) DEFAULT 'BR' CHECK (market IN ('BR', 'US', 'EU')),
+    url TEXT,
+    signals TEXT,
+    ratings JSONB NOT NULL DEFAULT '{"demanda":3,"monetizacao":3,"provaSocial":3,"tendencia":3,"fitBlog":3,"reputacao":3,"facilidadeSeo":3,"conformidade":3}'::jsonb,
+    score INTEGER DEFAULT 0 CHECK (score >= 0 AND score <= 100),
+    tier VARCHAR(5) DEFAULT 'D' CHECK (tier IN ('A', 'B', 'C', 'D')),
+    verdict VARCHAR(50) CHECK (verdict IN ('pesquisar', 'testar', 'seguir', 'descartar')),
+    verdict_note TEXT,
+    blog_id UUID REFERENCES custom_salesengine.opportunity_blogs(id) ON DELETE SET NULL,
+    dossier JSONB NOT NULL DEFAULT '{}'::jsonb,
+    is_example BOOLEAN DEFAULT FALSE,
+    created_by UUID REFERENCES custom_salesengine.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.opportunity_score_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    opportunity_id UUID NOT NULL REFERENCES custom_salesengine.opportunities(id) ON DELETE CASCADE,
+    score INTEGER NOT NULL,
+    tier VARCHAR(5) NOT NULL,
+    ratings JSONB NOT NULL,
+    reason TEXT,
+    changed_by VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS custom_salesengine.opportunity_pautas (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    opportunity_id UUID NOT NULL REFERENCES custom_salesengine.opportunities(id) ON DELETE CASCADE,
+    blog_id UUID REFERENCES custom_salesengine.opportunity_blogs(id) ON DELETE SET NULL,
+    title VARCHAR(255) NOT NULL,
+    hook TEXT NOT NULL,
+    target_audience TEXT,
+    disclosure_notice TEXT NOT NULL,
+    sensitive_alert TEXT,
+    recommended_angle TEXT,
+    call_to_action TEXT,
+    status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'published')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ------------------------------------------------------------------------------
+-- 5. ÍNDICES DE PERFORMANCE
 -- ------------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_leads_workspace ON custom_salesengine.leads(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON custom_salesengine.leads(status);
@@ -297,9 +380,13 @@ CREATE INDEX IF NOT EXISTS idx_deals_stage ON custom_salesengine.deals(stage_id)
 CREATE INDEX IF NOT EXISTS idx_messages_contact ON custom_salesengine.messages_log(contact_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON custom_salesengine.messages_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_gates_pending ON custom_salesengine.audit_gates(workspace_id, status) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_opp_source ON custom_salesengine.opportunities(source);
+CREATE INDEX IF NOT EXISTS idx_opp_score ON custom_salesengine.opportunities(score DESC);
+CREATE INDEX IF NOT EXISTS idx_opp_tier ON custom_salesengine.opportunities(tier);
+CREATE INDEX IF NOT EXISTS idx_opp_history ON custom_salesengine.opportunity_score_history(opportunity_id);
 
 -- ------------------------------------------------------------------------------
--- 5. ROW LEVEL SECURITY (RLS)
+-- 6. ROW LEVEL SECURITY (RLS)
 -- ------------------------------------------------------------------------------
 ALTER TABLE custom_salesengine.entities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE custom_salesengine.records ENABLE ROW LEVEL SECURITY;
@@ -311,3 +398,8 @@ ALTER TABLE custom_salesengine.campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE custom_salesengine.deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE custom_salesengine.proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE custom_salesengine.audit_gates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.opportunity_blogs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.opportunity_source_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.opportunities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.opportunity_score_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE custom_salesengine.opportunity_pautas ENABLE ROW LEVEL SECURITY;

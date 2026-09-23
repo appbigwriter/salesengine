@@ -14,7 +14,16 @@ import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 import { NewLeadModal } from '../components/NewLeadModal';
 import { ImportCsvModal } from '../components/ImportCsvModal';
 import { CreateProposalModal } from '../components/CreateProposalModal';
+import { OpportunityDashboard } from '../components/OpportunityBuilder/OpportunityDashboard';
+import { NewOpportunityModal } from '../components/OpportunityBuilder/NewOpportunityModal';
+import { OpportunityScoringModal } from '../components/OpportunityBuilder/OpportunityScoringModal';
+import { DeepResearchDossierModal } from '../components/OpportunityBuilder/DeepResearchDossierModal';
+import { VerdictPautaModal } from '../components/OpportunityBuilder/VerdictPautaModal';
+import { SearchQueriesModal } from '../components/OpportunityBuilder/SearchQueriesModal';
+import { WeightsConfigModal } from '../components/OpportunityBuilder/WeightsConfigModal';
 import { AuditGateItem, Lead } from '../types';
+import { Opportunity, ScoreWeights } from '../types/opportunity';
+import { DEFAULT_SCORE_WEIGHTS } from '../lib/score';
 import { 
   TrendingUp, 
   CalendarCheck, 
@@ -26,7 +35,8 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Building2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Target
 } from 'lucide-react';
 
 const initialLeads: Lead[] = [
@@ -95,6 +105,16 @@ export default function DashboardPage() {
   const [isProposalOpen, setIsProposalOpen] = useState(false);
   const [selectedProposalCompany, setSelectedProposalCompany] = useState('TechCorp Brasil');
 
+  // Opportunity Builder State & Modals
+  const [isNewOppOpen, setIsNewOppOpen] = useState(false);
+  const [isScoringOpen, setIsScoringOpen] = useState(false);
+  const [isDossierOpen, setIsDossierOpen] = useState(false);
+  const [isVerdictOpen, setIsVerdictOpen] = useState(false);
+  const [isSearchQueriesOpen, setIsSearchQueriesOpen] = useState(false);
+  const [isWeightsConfigOpen, setIsWeightsConfigOpen] = useState(false);
+  const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
+  const [scoreWeights, setScoreWeights] = useState<ScoreWeights>(DEFAULT_SCORE_WEIGHTS);
+
   const [gates, setGates] = useState<AuditGateItem[]>([
     {
       id: 'gate-1',
@@ -131,6 +151,26 @@ export default function DashboardPage() {
     setIsProposalOpen(true);
   };
 
+  const handleOpenScoring = (opp: Opportunity) => {
+    setSelectedOpportunity(opp);
+    setIsScoringOpen(true);
+  };
+
+  const handleOpenDossier = (opp: Opportunity) => {
+    setSelectedOpportunity(opp);
+    setIsDossierOpen(true);
+  };
+
+  const handleOpenVerdict = (opp: Opportunity) => {
+    setSelectedOpportunity(opp);
+    setIsVerdictOpen(true);
+  };
+
+  const handleOpenSearchQueries = (opp?: Opportunity) => {
+    setSelectedOpportunity(opp || null);
+    setIsSearchQueriesOpen(true);
+  };
+
   const pendingGatesCount = gates.filter(g => g.status === 'pending').length;
 
   return (
@@ -161,6 +201,12 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex items-center gap-3 relative z-10">
+              <button 
+                onClick={() => setActiveTab('opportunities')}
+                className="px-3.5 py-2 bg-brand/15 hover:bg-brand/25 text-brand rounded-xl text-xs font-semibold border border-brand/30 transition flex items-center gap-1.5"
+              >
+                <Target className="w-4 h-4" /> Opportunity Builder
+              </button>
               <button 
                 onClick={() => setIsNewLeadOpen(true)}
                 className="px-3.5 py-2 bg-surface-elevated hover:bg-surface-border text-slate-200 rounded-xl text-xs font-semibold border border-surface-border transition flex items-center gap-1.5"
@@ -274,6 +320,17 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {activeTab === 'opportunities' && (
+            <OpportunityDashboard
+              onOpenNewOpportunity={() => setIsNewOppOpen(true)}
+              onOpenScoring={handleOpenScoring}
+              onOpenDossier={handleOpenDossier}
+              onOpenVerdict={handleOpenVerdict}
+              onOpenSearchQueries={handleOpenSearchQueries}
+              onOpenWeightsConfig={() => setIsWeightsConfigOpen(true)}
+            />
+          )}
+
           {activeTab === 'leads' && (
             <LeadsTable 
               leads={leads}
@@ -353,6 +410,62 @@ export default function DashboardPage() {
         isOpen={isProposalOpen}
         onClose={() => setIsProposalOpen(false)}
         dealCompany={selectedProposalCompany}
+      />
+
+      {/* Opportunity Builder Modals */}
+      <NewOpportunityModal
+        isOpen={isNewOppOpen}
+        onClose={() => setIsNewOppOpen(false)}
+        onSave={(newOpp) => {
+          // New opportunity added
+          setIsNewOppOpen(false);
+        }}
+      />
+
+      <OpportunityScoringModal
+        isOpen={isScoringOpen}
+        onClose={() => setIsScoringOpen(false)}
+        opportunity={selectedOpportunity}
+        onUpdateOpportunity={(updated) => {
+          setSelectedOpportunity(updated);
+          setIsScoringOpen(false);
+        }}
+      />
+
+      <DeepResearchDossierModal
+        isOpen={isDossierOpen}
+        onClose={() => setIsDossierOpen(false)}
+        opportunity={selectedOpportunity}
+        onSaveDossier={(updated) => {
+          setSelectedOpportunity(updated);
+          setIsDossierOpen(false);
+        }}
+      />
+
+      <VerdictPautaModal
+        isOpen={isVerdictOpen}
+        onClose={() => setIsVerdictOpen(false)}
+        opportunity={selectedOpportunity}
+        onSaveVerdict={(updated) => {
+          setSelectedOpportunity(updated);
+          setIsVerdictOpen(false);
+        }}
+      />
+
+      <SearchQueriesModal
+        isOpen={isSearchQueriesOpen}
+        onClose={() => setIsSearchQueriesOpen(false)}
+        initialOpportunity={selectedOpportunity}
+      />
+
+      <WeightsConfigModal
+        isOpen={isWeightsConfigOpen}
+        onClose={() => setIsWeightsConfigOpen(false)}
+        currentWeights={scoreWeights}
+        onSaveWeights={(w) => {
+          setScoreWeights(w);
+          setIsWeightsConfigOpen(false);
+        }}
       />
     </div>
   );
